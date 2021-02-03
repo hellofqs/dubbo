@@ -181,12 +181,17 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         dispatch(new ServiceConfigUnexportedEvent(this));
     }
 
+    /**
+     * 暴露服务的入口
+     */
+    @Override
     public synchronized void export() {
         if (bootstrap == null) {
             bootstrap = DubboBootstrap.getInstance();
             bootstrap.initialize();
         }
 
+        // 设置配置信息
         checkAndUpdateSubConfigs();
 
         //init serviceMetadata
@@ -201,6 +206,7 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
             return;
         }
 
+        // 是否需要延迟暴露
         if (shouldDelay()) {
             DELAY_EXPORT_EXECUTOR.schedule(this::doExport, getDelay(), TimeUnit.MILLISECONDS);
         } else {
@@ -290,7 +296,9 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         postProcessConfig();
     }
 
-
+    /**
+     * 核心是暴露状态的检查
+     */
     protected synchronized void doExport() {
         if (unexported) {
             throw new IllegalStateException("The service " + interfaceClass.getName() + " has already unexported!");
@@ -306,8 +314,14 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
         doExportUrls();
     }
 
+    /**
+     * 1. 保存服务注册者的信息
+     * 2. 提取registry url
+     * 3. 按每个协议注册一次数据到 registry url
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void doExportUrls() {
+        // 1.保存服务的信息
         ServiceRepository repository = ApplicationModel.getServiceRepository();
         ServiceDescriptor serviceDescriptor = repository.registerService(getInterfaceClass());
         repository.registerProvider(
@@ -317,8 +331,13 @@ public class ServiceConfig<T> extends ServiceConfigBase<T> {
                 this,
                 serviceMetadata
         );
-
+        /**
+         *  registry://test-zk.yangtuojia.com:2184
+         *                 /org.apache.dubbo.registry.RegistryService
+         *                     ?application=fqs-test-app&dubbo=2.0.2&pid=60452&registry=zookeeper&timestamp=1611580006342
+         */
         List<URL> registryURLs = ConfigValidationUtils.loadRegistries(this, true);
+
 
         for (ProtocolConfig protocolConfig : protocols) {
             String pathKey = URL.buildKey(getContextPath(protocolConfig)
